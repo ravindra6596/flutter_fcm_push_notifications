@@ -138,4 +138,4 @@ Thumbs.db
 
 
 # exclude server_key.dart
-lib/server_key.dart
+assets/server_key_info.json
