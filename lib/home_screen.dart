@@ -1,0 +1,144 @@
+import 'dart:developer';
+
+import 'package:auto_route/annotations.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:push_notification/core/db_helper.dart';
+import 'package:push_notification/di/configure.dart';
+import 'package:push_notification/routing/app_router.dart';
+import 'package:push_notification/service/send_notification_service.dart';
+import 'package:push_notification/utils/constants.dart';
+import 'package:push_notification/utils/strings.dart';
+
+// home screen or send notification from mobile
+@RoutePage()
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final messaging = FirebaseMessaging.instance;
+  var userNameController = TextEditingController();
+  var titleController = TextEditingController();
+  var bodyController = TextEditingController();
+  final localNotification = FlutterLocalNotificationsPlugin();
+  final globalKey = GlobalKey<FormState>();
+  late Future<int> notificationCountFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    notificationCountFuture = DatabaseHelper().getNotificationCount();
+    updateNotificationCount();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('FCM'),
+        actions: [
+          ValueListenableBuilder<int>(
+              valueListenable: NotificationCountNotifier.notifier,
+              builder: (context, notificationCount, _) {
+              return  Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.notifications),
+                    onPressed: () =>
+                        getIt<AppRouter>().push(NotificationRoute()),
+                  ),
+                  if (notificationCount > 0)
+                    Positioned(
+                      right: 4,
+                      top: 4,
+                      child: Container(
+                        padding: EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        constraints: BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        child: Center(
+                          child: Text(
+                            notificationCount > 9 ? '9+' : '$notificationCount',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            }
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(10),
+        child: Form(
+          key: globalKey,
+          child: Column(
+            spacing: 10,
+            children: [
+              TextFormField(
+                controller: titleController,
+                decoration: InputDecoration(
+                  hintText: title,
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter title text';
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: bodyController,
+                decoration: InputDecoration(
+                  hintText: body,
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter body text';
+                  }
+                  return null;
+                },
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  // DocumentSnapshot docSnap = await FirebaseFirestore.instance.collection('userToken').doc(userNameController.text.trim()).get();
+                  if (globalKey.currentState!.validate()) {
+                    final token = await messaging.getToken();
+
+                    log('accessToken : $token');
+                    // below function call for send notification when button click
+                    SendNotificationService.sendPushNotification(
+                      token!,
+                      titleController.text,
+                      bodyController.text,
+                      {'type': 'home'},
+                    );
+                  }
+                },
+                child: Text('Submit'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
