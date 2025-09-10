@@ -139,3 +139,8 @@ Thumbs.db
 
 # exclude server_key.dart
 assets/server_key_info.json
+# exclde google json file for android and ios
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+pubspec.lock
