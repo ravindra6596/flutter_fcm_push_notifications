@@ -1,1 +1,1 @@
-# flutter_fcm_notifications
+# flutter_fcm_push_notifications
