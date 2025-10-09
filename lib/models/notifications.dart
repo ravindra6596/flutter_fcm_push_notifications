@@ -4,6 +4,7 @@ class NotificationModel {
   String? body;
   String? receivedAt;
   String? type;
+  bool isReadNotification;
 
   NotificationModel({
     this.notificationId,
@@ -11,6 +12,7 @@ class NotificationModel {
     this.body,
     this.receivedAt,
     this.type,
+    this.isReadNotification = true,
   });
 
   factory NotificationModel.fromMap(Map<String, dynamic> map) {
@@ -20,6 +22,7 @@ class NotificationModel {
       body: map['body'] ?? '',
       receivedAt: map['receivedAt'] ?? '',
       type: map['type'] ?? '',
+      isReadNotification: map['isReadNotification'] == 1,
     );
   }
 }

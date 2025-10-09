@@ -44,7 +44,8 @@ class DatabaseHelper {
       title TEXT,
       body TEXT,
       receivedAt TEXT,
-      type TEXT
+      type TEXT,
+      isReadNotification INTEGER
     )
     ''');
   }
@@ -60,6 +61,7 @@ class DatabaseHelper {
         'body': body,
         'receivedAt': DateTime.now().millisecondsSinceEpoch.toString(),
         'type': type,
+        'isReadNotification': 0,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -79,6 +81,8 @@ class DatabaseHelper {
     final db = await dataBase;
     return Sqflite.firstIntValue(
       await db.rawQuery('SELECT COUNT(*) FROM $notificationTable'),
+      // if need to display unread notification count from list then use below line
+      // await db.rawQuery('SELECT COUNT(*) FROM $notificationTable WHERE isReadNotification = 0'),
     ) ?? 0;
   }
 
@@ -100,5 +104,30 @@ class DatabaseHelper {
       notificationTable,
     );
     return count;
+  }
+  // update listing bookmark
+  Future<void> updateNotificationStatus(String id,  bool readNotification) async {
+    log('Notification method call');
+    final db = await dataBase;
+    int isReadNotification = readNotification ? 1 : 0;
+    final existingSection = await db.query(
+      notificationTable,
+      where: 'notificationId = ?',
+      whereArgs: [id],
+    );
+
+    if (existingSection.isNotEmpty) {
+      await db.update(
+        notificationTable,
+        {
+          'isReadNotification': isReadNotification,
+        },
+        where: 'notificationId = ?',
+        whereArgs: [id],
+      );
+      log('Notification read/open with $id');
+    } else {
+      log('Notification Already read Id - $id');
+    }
   }
 }

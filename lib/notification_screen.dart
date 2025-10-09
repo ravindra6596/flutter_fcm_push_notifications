@@ -21,6 +21,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
     super.initState();
     notificationsFuture = fetchNotifications();
   }
+  Future<void> refreshNotifications() async {
+    setState(() {
+      notificationsFuture = fetchNotifications();
+    });
+
+    int count = await DatabaseHelper().getNotificationCount();
+    NotificationCountNotifier.updateCount(count);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +73,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             itemCount: notifications.length,
             itemBuilder: (context, index) {
               final notificationData = notifications[index];
+              final isRead = notificationData.isReadNotification;
               var dateTime = DateTime.fromMillisecondsSinceEpoch(
                   int.parse(notificationData.receivedAt ?? ''));
               String receivedDateTime(int n) => n.toString().padLeft(2, '0');
@@ -78,18 +87,21 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 5),
                   child: ListTile(
                     dense: true,
-                    onTap: () {
+                    onTap: () async {
                       if (notificationData.type != adminNotification) {
+                        await DatabaseHelper().updateNotificationStatus(notificationData.notificationId.toString(), true);
                         getIt<AppRouter>().push(
                             DetailsRoute(notificationModel: notificationData));
+                        refreshNotifications();
                       } else {}
                     },
                     visualDensity: VisualDensity(horizontal: -4, vertical: -4),
+                    tileColor: notificationData.type == adminNotification
+                        ? Colors.green.shade100
+                        : isRead ? Colors.grey.shade300 : Colors.grey.shade500,
                     shape: RoundedRectangleBorder(
                       side: BorderSide(
-                          color: notificationData.type == adminNotification
-                              ? Colors.grey.shade400
-                              : Colors.black54),
+                          color: Colors.black54),
                       borderRadius: BorderRadius.circular(5),
                     ),
                     title: Text(
