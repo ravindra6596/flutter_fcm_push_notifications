@@ -114,7 +114,18 @@ class NotificationService {
       int count = await DatabaseHelper().getNotificationCount();
       NotificationCountNotifier.updateCount(count);
       log('Count $count');
-      showNotification(message);
+      // show notifications when the some data has missing
+      final String? type = message.data['type'];
+
+      if ((type != null && type.isNotEmpty) &&
+          ((message.messageId != null && message.messageId!.isNotEmpty) ||
+              (message.notification?.title != null &&
+                  message.notification!.title!.isNotEmpty) ||
+              (message.notification?.body != null &&
+                  message.notification!.body!.isNotEmpty) ||
+              message.data.isNotEmpty)) {
+        showNotification(message);
+      }
     });
   }
 

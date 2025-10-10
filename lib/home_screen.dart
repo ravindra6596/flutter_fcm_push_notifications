@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:push_notification/core/db_helper.dart';
 import 'package:push_notification/di/configure.dart';
 import 'package:push_notification/routing/app_router.dart';
+import 'package:push_notification/service/notification_service.dart';
 import 'package:push_notification/service/send_notification_service.dart';
 import 'package:push_notification/utils/constants.dart';
 import 'package:push_notification/utils/strings.dart';
@@ -134,6 +135,29 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
                 },
                 child: Text('Submit'),
+              ),
+
+              ElevatedButton(
+                onPressed: () async {
+                  // Create a mock RemoteMessage object
+                  RemoteMessage mockMessage = RemoteMessage(
+                    notification: RemoteNotification(
+                      title: 'Transaction Complete',
+                      body: 'Your transaction was successfully completed!',
+                      android: AndroidNotification(
+                        imageUrl: 'https://images.pexels.com/photos/1172064/pexels-photo-1172064.jpeg', // Add image URL if needed
+                      ),
+                    ),
+                    data: {
+                      'transactionId': '12345',
+                      'status': 'completed',
+                    },
+                  );
+
+                  // Call showNotification with the mock message
+                  NotificationService().showNotification(mockMessage);
+                },
+                child: Text('Local Notification'),
               ),
             ],
           ),

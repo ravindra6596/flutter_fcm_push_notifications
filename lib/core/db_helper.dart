@@ -51,7 +51,12 @@ class DatabaseHelper {
   }
 
   // insert notifications
-  Future<int> insertNotifications(String notificationId, String title, String body,String type) async {
+  Future<int?> insertNotifications(String notificationId, String title, String body,String type) async {
+    // Check if required fields are not null or empty
+    if (notificationId.isEmpty || title.isEmpty || body.isEmpty || type.isEmpty) {
+      log('Skipped inserting invalid notification');
+      return null;
+    }
     final db = await dataBase;
     return await db.insert(
       notificationTable,

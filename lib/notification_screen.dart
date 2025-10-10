@@ -128,6 +128,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                   ? Colors.grey
                                   : Colors.black),
                         ),
+                        Text(
+                          displayTime,
+                        ),
                       ],
                     ),
                     trailing: Container(
