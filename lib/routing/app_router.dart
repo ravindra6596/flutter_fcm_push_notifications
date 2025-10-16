@@ -1,11 +1,11 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
-import 'package:push_notification/details_screen.dart';
+import 'package:push_notification/ui/notifications/details_screen.dart';
 import 'package:push_notification/di/configure.dart';
-import 'package:push_notification/home_screen.dart';
+import 'package:push_notification/ui/home/home_screen.dart';
 import 'package:push_notification/models/notifications.dart';
-import 'package:push_notification/notification_screen.dart';
-import 'package:push_notification/splash_screen.dart';
+import 'package:push_notification/ui/notifications/notification_screen.dart';
+import 'package:push_notification/ui/splash/splash_screen.dart';
 
 part 'app_router.gr.dart';
 
