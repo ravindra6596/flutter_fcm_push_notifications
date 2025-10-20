@@ -9,7 +9,8 @@ import 'package:push_notification/di/configure.dart';
 import 'package:push_notification/routing/app_router.dart';
 import 'package:push_notification/service/notification_service.dart';
 import 'package:push_notification/service/send_notification_service.dart';
-import 'package:push_notification/ui/feedback/feedback_form.dart';
+import 'package:push_notification/ui/QS/feedback_form.dart';
+import 'package:push_notification/ui/QS/privacy_policy.dart';
 import 'package:push_notification/utils/constants.dart';
 import 'package:push_notification/utils/strings.dart';
 
@@ -166,6 +167,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => BeautifulFeedbackForm(),));
                 },
                 child: Text('FeedBack'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => PrivacyPolicy(),));
+                },
+                child: Text('Privacy Policy'),
               ),
             ],
           ),

@@ -102,7 +102,7 @@ class _BeautifulFeedbackFormState extends State<BeautifulFeedbackForm>
       final feedbackData = {
         'type': _selectedFeedbackType,
         'rating': userRating,
-        'feedback': _feedbackMessage.trim(),
+        'QS': _feedbackMessage.trim(),
         'timestamp': DateTime.now().toIso8601String(),
       };
 
@@ -111,7 +111,7 @@ class _BeautifulFeedbackFormState extends State<BeautifulFeedbackForm>
       }
       log(feedbackData.toString());
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Thank you for your valuable feedback!')),
+        SnackBar(content: Text('Thank you for your valuable QS!')),
       );
 
       // Reset form
