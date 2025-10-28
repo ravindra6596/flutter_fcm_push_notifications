@@ -10,9 +10,11 @@ import 'package:push_notification/routing/app_router.dart';
 import 'package:push_notification/service/notification_service.dart';
 import 'package:push_notification/service/send_notification_service.dart';
 import 'package:push_notification/ui/QS/feedback_form.dart';
+import 'package:push_notification/ui/QS/new_getx_feedback.dart';
 import 'package:push_notification/ui/QS/privacy_policy.dart';
 import 'package:push_notification/utils/constants.dart';
 import 'package:push_notification/utils/strings.dart';
+import 'package:share_plus/share_plus.dart';
 
 // home screen or send notification from mobile
 @RoutePage()
@@ -170,9 +172,32 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               ElevatedButton(
                 onPressed: () async {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => FeedbackFormGetX(),));
+                },
+                child: Text('GetX FeedBack'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => PrivacyPolicy(),));
                 },
                 child: Text('Privacy Policy'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  const String appPackageName = 'com.unicornwings.quiz_sprint'; // replace with your actual package name
+                  final String playStoreLink = 'https://play.google.com/store/apps/details?id=$appPackageName';
+
+                  SharePlus.instance.share(
+                      ShareParams(
+                        title: 'Ace Your Exams with QuizSprint — Study Smarter, Not Harder! 🎯',
+                        subject: 'Boost Your Exam Prep with QuizSprint! 📚',
+                        text: 'Get ready to conquer your exams with QuizSprint — the ultimate interactive learning app!\n\n'
+                            'Practice MCQs, track your progress, and master every topic with personalized quizzes and detailed explanations.\n\n'
+                            '📚 Download now and unlock your full potential:\n$playStoreLink',
+                        excludedCupertinoActivities: [CupertinoActivityType.airDrop],
+                      ),
+                  );              },
+                child: Text('Share App'),
               ),
             ],
           ),
