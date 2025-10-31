@@ -12,6 +12,7 @@ import 'package:push_notification/service/send_notification_service.dart';
 import 'package:push_notification/ui/QS/feedback_form.dart';
 import 'package:push_notification/ui/QS/new_getx_feedback.dart';
 import 'package:push_notification/ui/QS/privacy_policy.dart';
+import 'package:push_notification/ui/lang.dart';
 import 'package:push_notification/utils/constants.dart';
 import 'package:push_notification/utils/strings.dart';
 import 'package:share_plus/share_plus.dart';
@@ -181,6 +182,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => PrivacyPolicy(),));
                 },
                 child: Text('Privacy Policy'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => LanguageApp(),));
+                },
+                child: Text('Language'),
               ),
               ElevatedButton(
                 onPressed: () async {
