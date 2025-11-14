@@ -171,7 +171,8 @@ class LoadChapterProgress extends GitaEvent {
 }
 class LoadSlokas extends GitaEvent {
   final int chapter;
-  LoadSlokas(this.chapter);
+  final int? initialIndex;
+  LoadSlokas(this.chapter, {this.initialIndex});
 }
 
 class SelectSloka extends GitaEvent {
@@ -252,8 +253,63 @@ class GitaBloc extends Bloc<GitaEvent, GitaState> {
       String folder = langFolderMap[currentLang] ?? appLocale.value.languageCode;
       String data = await rootBundle.loadString('assets/$folder/chapter$currentChapter.json');
       List jsonData = json.decode(data)['BhagavadGitaChapter'];
-      currentSlokas = jsonData.map((e) => Sloka.fromJson(e)).toList();
-      selectedIndex = 0;
+      List<Sloka> tempSlokas = jsonData.map((e) => Sloka.fromJson(e)).toList();
+      
+      // Get all favorites for current language and chapter at once for efficiency
+      final favMaps = await DatabaseHelper().getFavs(language: currentLang);
+      final favMap = <String, Map<String, dynamic>>{};
+      for (var fav in favMaps) {
+        if (fav['chapter'] == currentChapter) {
+          final key = '${fav['chapter']}_${fav['verse']}';
+          favMap[key] = fav;
+        }
+      }
+      
+      // Get chapter name from chapters.json
+      String chapterName = '';
+      try {
+        String chaptersData = await rootBundle.loadString('assets/$folder/chapters.json');
+        List chaptersJson = json.decode(chaptersData);
+        try {
+          final chapterMeta = chaptersJson.firstWhere(
+            (e) => e['chapter'] == currentChapter,
+          );
+          chapterName = chapterMeta['name'] ?? '';
+        } catch (e) {
+          // Chapter not found in list, use empty string
+        }
+      } catch (e) {
+        log('Error loading chapter name: $e');
+      }
+      
+      // Check favorite status for each sloka and create new instances
+      List<Sloka> loadedSlokas = [];
+      for (var sloka in tempSlokas) {
+        final key = '${sloka.chapter}_${sloka.verse}';
+        final isFav = favMap.containsKey(key);
+        final favData = favMap[key];
+        
+        // Use chapter name from favorite if available, otherwise use from chapters.json
+        String slokaChapterName = favData?['chapterName'] ?? chapterName;
+        
+        loadedSlokas.add(Sloka(
+          chapter: sloka.chapter,
+          verse: sloka.verse,
+          text: sloka.text,
+          meaning: sloka.meaning,
+          explanation: sloka.explanation,
+          chapterName: slokaChapterName,
+          isFavourite: isFav ? 1 : 0,
+          isRead: sloka.isRead,
+        ));
+      }
+      
+      currentSlokas = loadedSlokas;
+      selectedIndex = event.initialIndex ?? 0;
+      // Ensure selectedIndex is within bounds
+      if (selectedIndex >= currentSlokas.length) {
+        selectedIndex = currentSlokas.isNotEmpty ? currentSlokas.length - 1 : 0;
+      }
       emit(SlokasLoaded(currentSlokas, selectedIndex));
     });
 
@@ -266,8 +322,8 @@ class GitaBloc extends Bloc<GitaEvent, GitaState> {
       currentLang = event.lang;
       if (currentSlokas.isNotEmpty) {
         log('currentLang $currentLang');
-        // Reload slokas in new language
-        add(LoadSlokas(currentChapter));
+        // Reload slokas in new language, preserve current selectedIndex
+        add(LoadSlokas(currentChapter, initialIndex: selectedIndex));
       } else {
         // Reload chapters in new language
         add(LoadChapters());
@@ -332,6 +388,18 @@ class GitaBloc extends Bloc<GitaEvent, GitaState> {
       // Update current state if SlokasLoaded
       if (state is SlokasLoaded) {
         final currentState = state as SlokasLoaded;
+        
+        // Check if we're in favorites screen (all slokas are favorites)
+        final isFavoritesScreen = currentState.slokas.isNotEmpty && 
+                                  currentState.slokas.every((s) => s.isFavourite == 1);
+        
+        // If in favorites screen and removing favorite, reload favorites list
+        if (isFavoritesScreen && newFavValue == 0) {
+          add(LoadFavorites(language));
+          return;
+        }
+        
+        // Update slokas list with new favorite status
         final updatedSlokas = currentState.slokas.map((s) {
           if (s.chapter == sloka.chapter && s.verse == sloka.verse) {
             return Sloka(
@@ -347,15 +415,17 @@ class GitaBloc extends Bloc<GitaEvent, GitaState> {
           return s;
         }).toList();
 
-        // If unfavoring, remove from list (for favorites screen; chapter screen keeps all)
-        if (newFavValue == 0) {
-          updatedSlokas.removeWhere((s) => s.chapter == sloka.chapter && s.verse == sloka.verse);
-        }
+        // Update the bloc's currentSlokas to preserve favorite status when selecting different slokas
+        currentSlokas = updatedSlokas;
 
         // Adjust selectedIndex if out of bounds
         int newSelectedIndex = currentState.selectedIndex;
-        if (newSelectedIndex >= updatedSlokas.length) {
-          newSelectedIndex = updatedSlokas.isNotEmpty ? 0 : 0;
+        if (updatedSlokas.isEmpty) {
+          newSelectedIndex = 0;
+        } else if (newSelectedIndex >= updatedSlokas.length) {
+          newSelectedIndex = updatedSlokas.length - 1;
+        } else if (newSelectedIndex < 0) {
+          newSelectedIndex = 0;
         }
 
         emit(SlokasLoaded(updatedSlokas, newSelectedIndex));
@@ -649,13 +719,14 @@ class SlokaListScreen extends StatelessWidget {
   final int chapter;
   final String language;
   final int initialIndex;
-  const SlokaListScreen({required this.chapterName,required this.chapter,required this.language,this.initialIndex = 0,});
+  final String isFrom;
+  const SlokaListScreen({required this.chapterName,required this.chapter,required this.language,this.initialIndex = 0,this.isFrom = ''});
 
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => GitaBloc()..currentLang = language..add(LoadSlokas(chapter))..add(SelectSloka(initialIndex)),
+      create: (_) => GitaBloc()..currentLang = language..add(LoadSlokas(chapter, initialIndex: initialIndex)),
       child: Scaffold(
         appBar: AppBar(
           title: Text(chapterName),
@@ -663,7 +734,7 @@ class SlokaListScreen extends StatelessWidget {
           actions: [
             BlocBuilder<GitaBloc, GitaState>(
               builder: (context, state) {
-                if (state is SlokasLoaded) {
+                if (state is SlokasLoaded && state.slokas.isNotEmpty) {
                   final current = state.slokas[state.selectedIndex];
                   bool isFav = current.isFavourite == 1;
                   return IconButton(
@@ -685,9 +756,20 @@ class SlokaListScreen extends StatelessWidget {
           builder: (context, state) {
             if (state is GitaLoading) return Center(child: CircularProgressIndicator());
             if (state is SlokasLoaded) {
-              int index = state.selectedIndex;
-              DatabaseHelper().markSlokaRead(chapter, state.slokas[index].verse, chapterName, language);
-              DatabaseHelper().getReadCount(language, chapter);
+              if (state.slokas.isEmpty) {
+                return Center(child: Text("No slokas available"));
+              }
+              // Ensure selectedIndex is within bounds
+              int safeIndex = state.selectedIndex;
+              if (safeIndex < 0 || safeIndex >= state.slokas.length) {
+                safeIndex = 0;
+              }
+              int index = safeIndex;
+              // Ensure index is within bounds
+              if (index >= 0 && index < state.slokas.length) {
+                DatabaseHelper().markSlokaRead(chapter, state.slokas[index].verse, chapterName, language);
+                DatabaseHelper().getReadCount(language, chapter);
+              }
               return Column(
                 children: [
                   SizedBox(
@@ -711,7 +793,7 @@ class SlokaListScreen extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: SlokaDetail(state.slokas[state.selectedIndex],state.slokas.length),
+                    child: SlokaDetail(state.slokas[safeIndex],state.slokas.length),
                   ),
                 ],
               );
@@ -761,32 +843,26 @@ class SlokaDetail extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Visibility(
-                visible: selectedIndex !=0,
-                child: IconButton(
-                    onPressed: () {
-                      final bloc = BlocProvider.of<GitaBloc>(context);
-                      final state = bloc.state;
-                      if (state is SlokasLoaded && state.selectedIndex > 0) {
-                        bloc.add(SelectSloka(state.selectedIndex - 1));
-                      }
-                    },
-                    icon: Icon(Icons.arrow_circle_left_outlined,size: 35)),
-              ),
+              IconButton(
+                  onPressed: selectedIndex ==0 ? null :  () {
+                    final bloc = BlocProvider.of<GitaBloc>(context);
+                    final state = bloc.state;
+                    if (state is SlokasLoaded && state.selectedIndex > 0) {
+                      bloc.add(SelectSloka(state.selectedIndex - 1));
+                    }
+                  },
+                  icon: Icon(Icons.arrow_circle_left_outlined,size: 35)),
               Text('${sloka.verse} / $allShloka', style: TextStyle(fontSize: 16)),
-              Visibility(
-                visible: selectedIndex != allShloka - 1,
-                child: IconButton(
-                    onPressed: () {
-                      final bloc = BlocProvider.of<GitaBloc>(context);
-                      final state = bloc.state;
-                      if (state is SlokasLoaded &&
-                          state.selectedIndex < state.slokas.length - 1) {
-                        bloc.add(SelectSloka(state.selectedIndex + 1));
-                      }
-                    },
-                    icon: Icon(Icons.arrow_circle_right_outlined,size: 35,)),
-              ),
+              IconButton(
+                  onPressed: selectedIndex == allShloka - 1 ? null :  () {
+                    final bloc = BlocProvider.of<GitaBloc>(context);
+                    final state = bloc.state;
+                    if (state is SlokasLoaded &&
+                        state.selectedIndex < state.slokas.length - 1) {
+                      bloc.add(SelectSloka(state.selectedIndex + 1));
+                    }
+                  },
+                  icon: Icon(Icons.arrow_circle_right_outlined,size: 35,)),
             ],
           )
         ],
@@ -971,23 +1047,13 @@ class FavoriteSlokasScreen extends StatelessWidget {
                             chapter: sloka.chapter,
                             language: language,
                             initialIndex: sloka.verse - 1,
+                            isFrom: 'Fav',
                           ),
                         ),
-                      );
-                      /*Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BlocProvider(
-                            create: (_) => GitaBloc()
-                              ..currentLang = language
-                              ..add(LoadSlokas(sloka.chapter))
-                              ..add(SelectSloka(sloka.verse)),
-                            child: Material(
-                              child: SlokaDetail(sloka, 0),
-                            ),
-                          ),
-                        ),
-                      );*/
+                      ).then((value) {
+                        // Reload favorites when returning from details screen
+                        context.read<GitaBloc>().add(LoadFavorites(language));
+                      });
                     },
                   );
                 },

@@ -171,7 +171,7 @@ class DatabaseHelper {
       'meaning': sloka.meaning,
       'explanation': sloka.explanation,
       'chapterName': chapterName,
-      'isFavourite': sloka.explanation,
+      'isFavourite': 1,
       'language': language,
     });
   }

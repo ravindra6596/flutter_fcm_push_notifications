@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'package:auto_route/annotations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:push_notification/core/db_helper.dart';
 import 'package:push_notification/di/configure.dart';
@@ -12,6 +13,7 @@ import 'package:push_notification/service/send_notification_service.dart';
 import 'package:push_notification/ui/QS/feedback_form.dart';
 import 'package:push_notification/ui/QS/new_getx_feedback.dart';
 import 'package:push_notification/ui/QS/privacy_policy.dart';
+import 'package:push_notification/ui/fav.dart';
 import 'package:push_notification/ui/lang.dart';
 import 'package:push_notification/utils/constants.dart';
 import 'package:push_notification/utils/strings.dart';
@@ -188,6 +190,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => LanguageApp(),));
                 },
                 child: Text('Language'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => BlocProvider(
+                      create: (_) => FavBloc(FavoriteRepository())..add(LoadFav()),child: FavHomeScreen()),));
+                },
+                child: Text('FavoritesScreen'),
               ),
               ElevatedButton(
                 onPressed: () async {
