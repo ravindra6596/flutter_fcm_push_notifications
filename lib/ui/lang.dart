@@ -4,6 +4,10 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:push_notification/core/db_helper.dart';
+import 'package:push_notification/utils/locale_controller.dart';
+import 'package:push_notification/utils/strings.dart';
 
 class Chapter {
   final int? chapter;
@@ -99,79 +103,13 @@ class LanguageBloc extends Bloc<LanguageEvent, LanguageState> {
   }
 }
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Bhagavad Gita'),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              context.read<LanguageBloc>().add(LoadLanguage(value));
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'marathi', child: Text('Marathi')),
-              PopupMenuItem(value: 'hindi', child: Text('Hindi')),
-              PopupMenuItem(value: 'english', child: Text('English')),
-            ],
-          ),
-        ],
-      ),
-      body: BlocBuilder<LanguageBloc, LanguageState>(
-        builder: (context, state) {
-          if (state is LanguageLoading) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (state is LanguageLoaded) {
-            return ListView.builder(
-              itemCount: state.chapters.length,
-              itemBuilder: (context, index) {
-                final chapter = state.chapters[index];
-                return Card(
-                  margin: const EdgeInsets.all(8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Chapter ${chapter.chapter}, Verse ${chapter.verse}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(chapter.text ?? ''),
-                        const SizedBox(height: 8),
-
-                        Text(chapter.meaning ?? ''),
-                        const SizedBox(height: 8),
-
-                        Text(chapter.explanation ?? ''),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-          } else if (state is LanguageError) {
-            return Center(child: Text('Error: ${state.message}'));
-          }
-          return const Center(child: Text('Select a language'));
-        },
-      ),
-    );
-  }
-}
-
 class LanguageApp extends StatelessWidget {
   const LanguageApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => LanguageBloc()..add(const LoadLanguage('marathi')),
+      create: (context) => LanguageBloc()..add(LoadLanguage(appLocale.value.languageCode)),
       child: ChapterListScreen(),
     );
   }
@@ -181,10 +119,11 @@ class LanguageApp extends StatelessWidget {
 class ChapterMeta {
   final int chapter;
   final String name;
-  ChapterMeta({required this.chapter, required this.name});
+  final int totalShlokas;
+  ChapterMeta({required this.chapter, required this.name,required this.totalShlokas});
 
   factory ChapterMeta.fromJson(Map<String, dynamic> json) =>
-      ChapterMeta(chapter: json['chapter'], name: json['name']);
+      ChapterMeta(chapter: json['chapter'], name: json['name'],totalShlokas:json['totalShlokas']);
 }
 
 class Sloka {
@@ -193,6 +132,9 @@ class Sloka {
   final String text;
   final String meaning;
   final String explanation;
+  final String chapterName;
+  final int isFavourite;
+  bool isRead;
 
   Sloka({
     required this.chapter,
@@ -200,6 +142,9 @@ class Sloka {
     required this.text,
     required this.meaning,
     required this.explanation,
+    required this.chapterName,
+    this.isFavourite = 0,
+    this.isRead = false,
   });
 
   factory Sloka.fromJson(Map<String, dynamic> json) => Sloka(
@@ -208,6 +153,8 @@ class Sloka {
     text: json['text'],
     meaning: json['meaning'],
     explanation: json['explanation'],
+    chapterName: '',
+    isRead: false,
   );
 }
 
@@ -216,6 +163,12 @@ abstract class GitaEvent {}
 
 class LoadChapters extends GitaEvent {}
 
+class LoadChapterProgress extends GitaEvent {
+  final String language;
+  final List<ChapterMeta> chapters;
+
+  LoadChapterProgress(this.language, this.chapters);
+}
 class LoadSlokas extends GitaEvent {
   final int chapter;
   LoadSlokas(this.chapter);
@@ -230,7 +183,17 @@ class ChangeLanguage extends GitaEvent {
   final String lang;
   ChangeLanguage(this.lang);
 }
+class ToggleFavorite extends GitaEvent {
+  final Sloka sloka;
+  final String language;
+  final String chapterName;
+  ToggleFavorite({required this.sloka, required this.language,required this.chapterName});
+}
 
+class LoadFavorites extends GitaEvent {
+  final String language;
+  LoadFavorites( this.language );
+}
 abstract class GitaState {}
 
 class GitaLoading extends GitaState {}
@@ -239,24 +202,44 @@ class ChaptersLoaded extends GitaState {
   final List<ChapterMeta> chapters;
   ChaptersLoaded(this.chapters);
 }
+class ChaptersLoadProgress extends GitaState {
+  final List<ChapterMeta> chapters;
+  final Map<int, double> progress;
+  final double overallPercent;
 
+  ChaptersLoadProgress(this.chapters, {this.progress = const {},this.overallPercent = 0.0,});
+}
 class SlokasLoaded extends GitaState {
   final List<Sloka> slokas;
   final int selectedIndex;
   SlokasLoaded(this.slokas, this.selectedIndex);
 }
+class FavoritesLoaded extends GitaState {
+  final List<Sloka> favorites;
+  FavoritesLoaded(this.favorites);
+}
 
+class FavoriteUpdated extends GitaState {
+  final bool isFav;
+  final Sloka sloka;
+  FavoriteUpdated({required this.sloka, required this.isFav});
+}
 class GitaBloc extends Bloc<GitaEvent, GitaState> {
-  String currentLang = 'marathi';
+  String currentLang = appLocale.value.languageCode;
   int currentChapter = 1;
   List<Sloka> currentSlokas = [];
   int selectedIndex = 0;
+  final Map<String, String> langFolderMap = {
+    'en': 'english',
+    'hi': 'hindi',
+    'mr': 'marathi',
+  };
 
   GitaBloc() : super(GitaLoading()) {
     on<LoadChapters>((event, emit) async {
       emit(GitaLoading());
-      String data = await rootBundle
-          .loadString('assets/$currentLang/chapters.json');
+      String folder = langFolderMap[currentLang] ?? appLocale.value.languageCode;
+      String data = await rootBundle.loadString('assets/$folder/chapters.json');
       List jsonData = json.decode(data);
       List<ChapterMeta> chapters =
       jsonData.map((e) => ChapterMeta.fromJson(e)).toList();
@@ -266,11 +249,29 @@ class GitaBloc extends Bloc<GitaEvent, GitaState> {
     on<LoadSlokas>((event, emit) async {
       emit(GitaLoading());
       currentChapter = event.chapter;
-      String data = await rootBundle
-          .loadString('assets/$currentLang/chapter$currentChapter.json');
+      String folder = langFolderMap[currentLang] ?? appLocale.value.languageCode;
+      String data = await rootBundle.loadString('assets/$folder/chapter$currentChapter.json');
       List jsonData = json.decode(data)['BhagavadGitaChapter'];
       currentSlokas = jsonData.map((e) => Sloka.fromJson(e)).toList();
       selectedIndex = 0;
+      // NEW: Load favorite status from DB for this chapter and language
+      final favMaps = await DatabaseHelper().getFavs(language: currentLang,  );
+      final favSet = favMaps.map((fav) => '${fav['chapter']}-${fav['verse']}').toSet(); // Create a set for quick lookup
+
+      // Update isFavourite for each sloka if it's in favorites
+      currentSlokas = currentSlokas.map((sloka) {
+        final key = '${sloka.chapter}-${sloka.verse}';
+        return Sloka(
+          chapter: sloka.chapter,
+          verse: sloka.verse,
+          text: sloka.text,
+          meaning: sloka.meaning,
+          explanation: sloka.explanation,
+          isFavourite: favSet.contains(key) ? 1 : 0,  // Set based on DB
+          chapterName: sloka.chapterName,  // Preserve (null for regular slokas)
+          isRead: sloka.isRead,
+        );
+      }).toList();
       emit(SlokasLoaded(currentSlokas, selectedIndex));
     });
 
@@ -291,6 +292,117 @@ class GitaBloc extends Bloc<GitaEvent, GitaState> {
       }
     });
 
+
+    // This event is for PROGRESS screen
+    on<LoadChapterProgress>((event, emit) async {
+      emit(GitaLoading());
+
+      String folder = langFolderMap[currentLang] ?? appLocale.value.languageCode;
+      String data = await rootBundle.loadString('assets/$folder/chapters.json');
+      List jsonData = json.decode(data);
+      List<ChapterMeta> chapters =
+      jsonData.map((e) => ChapterMeta.fromJson(e)).toList();
+
+      Map<int, double> progressMap = {};
+      int totalRead = 0;
+      int totalShlokas = 0;
+
+      for (final chapter in chapters) {
+        int readCount =
+        await DatabaseHelper().getReadCount(event.language, chapter.chapter);
+        double percent = chapter.totalShlokas == 0
+            ? 0
+            : (readCount / chapter.totalShlokas) * 100;
+
+        progressMap[chapter.chapter] = percent;
+        totalRead += readCount;
+        totalShlokas += chapter.totalShlokas;
+      }
+
+      double overallPercent =
+      totalShlokas == 0 ? 0 : (totalRead / totalShlokas) * 100;
+
+      emit(ChaptersLoadProgress(
+        chapters,
+        progress: progressMap,
+        overallPercent: overallPercent,
+      ));
+    });
+    on<ToggleFavorite>((event, emit) async {
+      final sloka = event.sloka;
+      final language = event.language;
+      final chapterName = event.chapterName;
+
+      // Determine new favorite value
+      final newFavValue = sloka.isFavourite == 1 ? 0 : 1;
+
+      // Update database
+      if (newFavValue == 1) {
+        await DatabaseHelper().addFav(sloka, language, chapterName);
+      } else {
+        await DatabaseHelper().removeFav(
+          chapter: sloka.chapter,
+          verse: sloka.verse,
+          language: language,
+        );
+      }
+
+      // Update current state if SlokasLoaded
+      if (state is SlokasLoaded) {
+        final currentState = state as SlokasLoaded;
+        final updatedSlokas = currentState.slokas.map((s) {
+          if (s.chapter == sloka.chapter && s.verse == sloka.verse) {
+            return Sloka(
+              chapter: s.chapter,
+              verse: s.verse,
+              text: s.text,
+              meaning: s.meaning,
+              explanation: s.explanation,
+              isFavourite: newFavValue,
+              chapterName: s.chapterName,  // Preserve chapterName
+            );
+          }
+          return s;
+        }).toList();
+
+        // If unfavoring, remove from list (for favorites screen; chapter screen keeps all)
+        if (newFavValue == 0) {
+          updatedSlokas.removeWhere((s) => s.chapter == sloka.chapter && s.verse == sloka.verse);
+        }
+
+        // Adjust selectedIndex if out of bounds
+        int newSelectedIndex = currentState.selectedIndex;
+        if (newSelectedIndex >= updatedSlokas.length) {
+          newSelectedIndex = updatedSlokas.isNotEmpty ? 0 : 0;
+        }
+
+        emit(SlokasLoaded(updatedSlokas, newSelectedIndex));
+      }
+    });
+
+    on<LoadFavorites>((event, emit) async {
+      emit(GitaLoading());
+
+      // Load fav slokas from DB
+      final favMaps = await DatabaseHelper().getFavs(language: event.language);
+
+      final favSlokas = favMaps.map((e) => Sloka(
+        chapter: e['chapter'],
+        verse: e['verse'],
+        text: e['text'],
+        meaning: e['meaning'],
+        explanation: e['explanation'],
+        isFavourite: 1,  // Always 1 for loaded favorites
+        chapterName: e['chapterName'],  // Added: From DB
+      )).toList();
+
+      currentSlokas = favSlokas;
+      selectedIndex = 0;
+
+      emit(SlokasLoaded(favSlokas, selectedIndex));
+    });
+
+
   }
 }
 
@@ -306,6 +418,65 @@ class ChapterListScreen extends StatefulWidget {
 
 class _ChapterListScreenState extends State<ChapterListScreen> {
 
+  final tables = [
+    {"name": "sloka_read_status", "label": "Read Status"},
+    {"name": "fav_slokas", "label": "Favourites"},
+  ];
+
+  void showClearTablesPopup(BuildContext context) {
+    final selectedTables = ValueNotifier<List<String>>([]);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Clear Table Data"),
+          content: SizedBox(
+            width: 300,
+            height: 100,
+            child: ValueListenableBuilder<List<String>>(
+              valueListenable: selectedTables,
+              builder: (context, selected, _) {
+                return ListView(
+                  children: tables.map((table) {
+                    return CheckboxListTile(
+                      title: Text(table["label"]!),
+                      value: selected.contains(table["name"]),
+                        onChanged: (val) {
+                          final copy = List<String>.from(selectedTables.value);
+                          if (val == true) {
+                            copy.add(table["name"]!);
+                          } else {
+                            copy.remove(table["name"]!);
+                          }
+                          selectedTables.value = copy; // works because it's List<String>
+                        }
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () async {
+                for (String table in selectedTables.value) {
+                  await DatabaseHelper().clearTable(table);
+                }
+                Navigator.pop(context);
+              },
+              child: Text("Clear Selected"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -314,8 +485,14 @@ class _ChapterListScreenState extends State<ChapterListScreen> {
       child: Scaffold(
         appBar: AppBar(
           backgroundColor: Colors.blue,
-          title: Text('Chapters'),
+          title: Text(AppLocalizations.of(context)?.chaptersList ?? chaptersList),
           actions: [
+            IconButton(
+              onPressed: () async {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => ProgressScreen(),));
+              },
+              icon: Icon(Icons.preview),
+            ),
             LanguageDropdown(),
           ],
         ),
@@ -328,14 +505,20 @@ class _ChapterListScreenState extends State<ChapterListScreen> {
                 itemBuilder: (context, index) {
                   final chapter = state.chapters[index];
                   return ListTile(
-                      title: Text('${chapter.chapter}. ${chapter.name}'),
+                      title: Text('${AppLocalizations.of(context)?.chapterText ?? chapterText} ${chapter.chapter} : ${chapter.name}'),
+                      subtitle: Row(
+                        children: [
+                          Icon(Icons.list),
+                          Text('${chapter.totalShlokas} ${AppLocalizations.of(context)?.text ?? text}'),
+                        ],
+                      ),
                       onTap: () {
-
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => SlokaListScreen(
-                              chapterName: chapter.name,
+                            // builder: (_) => SlokaListScreen(
+                            builder: (_) => AllSlokaListScreen(
+                              chapterMeta: chapter,
                               chapter: chapter.chapter,
                               language: context.read<GitaBloc>().currentLang, // pass current language
                             ),
@@ -350,6 +533,130 @@ class _ChapterListScreenState extends State<ChapterListScreen> {
             return SizedBox.shrink();
           },
         ),
+        floatingActionButton: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FloatingActionButton(
+              child: Icon(Icons.clear),
+              onPressed: () {
+                showClearTablesPopup(context);
+            },),
+            FloatingActionButton(
+              child: Icon(Icons.favorite),
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => FavoriteSlokasScreen(language: appLocale.value.languageCode),));
+            },),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AllSlokaListScreen extends StatefulWidget {
+  final ChapterMeta? chapterMeta;
+  final int? chapter;
+  final String? language;
+  const AllSlokaListScreen(  {super.key,   this.chapterMeta,  this.chapter,  this.language, });
+
+  @override
+  State<AllSlokaListScreen> createState() => _AllSlokaListScreenState();
+}
+
+class _AllSlokaListScreenState extends State<AllSlokaListScreen> {
+  List<int> readVerses = [];
+
+
+  Future<void> _loadReadVerses() async {
+    readVerses = await DatabaseHelper().getReadSlokaVerses(widget.language ?? 'mr', widget.chapter ?? 0);
+   }
+  @override
+  void initState() {
+    super.initState();
+    _loadReadVerses(); // load once when opened
+  }
+  Future<void> _reloadWhenBack(BuildContext context) async {
+    // called after returning from details
+    await _loadReadVerses();
+    final bloc = context.read<GitaBloc>();
+    if (bloc.state is SlokasLoaded) {
+      final current = bloc.state as SlokasLoaded;
+      bloc.emit(SlokasLoaded(current.slokas, current.selectedIndex));
+    }
+  }
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => GitaBloc()..currentLang = widget.language!..add(LoadSlokas(widget.chapter!)),
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.chapterMeta?.name ?? ''),
+          backgroundColor: Colors.blue,
+        ),
+        body: BlocConsumer <GitaBloc, GitaState>(
+          listenWhen: (prev, curr) => curr is SlokasLoaded,
+          listener: (context, state) async {
+            if (state is SlokasLoaded) {
+              await _loadReadVerses();
+            }
+          },
+          builder: (context, state) {
+            if (state is GitaLoading) return Center(child: CircularProgressIndicator());
+            if (state is SlokasLoaded) {
+              return Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    Text(widget.chapterMeta?.name ?? ''),
+                    Expanded(
+                      child: GridView.builder(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4,
+                        childAspectRatio: 2,
+                        crossAxisSpacing: 2,
+                          mainAxisSpacing: 10,
+                        ),
+                        itemCount: state.slokas.length,
+                        itemBuilder: (context, index) {
+                          final verse = state.slokas[index].verse;
+                          final isRead =  readVerses.contains(verse);
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => SlokaListScreen(
+                                    chapterName: widget.chapterMeta?.name ?? '',
+                                    chapter: widget.chapter ?? 0,
+                                    language: context.read<GitaBloc>().currentLang,
+                                    initialIndex: index  ,
+                                  ),
+                                ),
+                              // ).then((value) => context.read<GitaBloc>().add(LoadSlokas(widget.chapter ?? 0)),);
+                              ).then((value) => _reloadWhenBack(context));
+                            },
+                            child: Container(
+                              alignment: Alignment.center,
+                              padding: EdgeInsets.all(8),
+                              margin: EdgeInsets.symmetric(horizontal: 4),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: isRead ? Colors.green.shade100 : Colors.red.shade100),
+                              ),
+                              child: Text('${AppLocalizations.of(context)?.text ?? text} ${state.slokas[index].verse}', ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return SizedBox.shrink();
+          },
+        ),
       ),
     );
   }
@@ -359,24 +666,46 @@ class SlokaListScreen extends StatelessWidget {
   final String chapterName;
   final int chapter;
   final String language;
-  const SlokaListScreen({required this.chapterName,required this.chapter,required this.language,});
+  final int initialIndex;
+  const SlokaListScreen({required this.chapterName,required this.chapter,required this.language,this.initialIndex = 0,});
+
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => GitaBloc()..currentLang = language..add(LoadSlokas(chapter)),
+      create: (_) => GitaBloc()..currentLang = language..add(LoadSlokas(chapter))..add(SelectSloka(initialIndex)),
       child: Scaffold(
         appBar: AppBar(
           title: Text(chapterName),
           backgroundColor: Colors.blue,
           actions: [
-            LanguageDropdown(),
+            BlocBuilder<GitaBloc, GitaState>(
+              builder: (context, state) {
+                if (state is SlokasLoaded) {
+                  final current = state.slokas[state.selectedIndex];
+                  bool isFav = current.isFavourite == 1;
+                  return IconButton(
+                    icon: Icon(isFav ? Icons.favorite : Icons.favorite_border,
+                        color: Colors.red),
+                    onPressed: () {
+                      context.read<GitaBloc>().add(
+                        ToggleFavorite(sloka: current, language: language,chapterName: chapterName),
+                      );
+                    },
+                  );
+                }
+                return SizedBox.shrink();
+              },
+            ),
           ],
         ),
         body: BlocBuilder<GitaBloc, GitaState>(
           builder: (context, state) {
             if (state is GitaLoading) return Center(child: CircularProgressIndicator());
             if (state is SlokasLoaded) {
+              int index = state.selectedIndex;
+              DatabaseHelper().markSlokaRead(chapter, state.slokas[index].verse, chapterName, language);
+              DatabaseHelper().getReadCount(language, chapter);
               return Column(
                 children: [
                   SizedBox(
@@ -393,14 +722,14 @@ class SlokaListScreen extends StatelessWidget {
                             decoration: BoxDecoration(
                                 color: index == state.selectedIndex ? Colors.blue : Colors.grey,
                                 borderRadius: BorderRadius.circular(5)),
-                            child: Center(child: Text('Sloka ${state.slokas[index].verse}', style: TextStyle(color: Colors.white))),
+                            child: Center(child: Text('${AppLocalizations.of(context)?.text ?? text} ${state.slokas[index].verse}', style: TextStyle(color: Colors.white))),
                           ),
                         );
                       },
                     ),
                   ),
                   Expanded(
-                    child: SlokaDetail(state.slokas[state.selectedIndex]),
+                    child: SlokaDetail(state.slokas[state.selectedIndex],state.slokas.length),
                   ),
                 ],
               );
@@ -413,12 +742,18 @@ class SlokaListScreen extends StatelessWidget {
   }
 }
 
+
 class SlokaDetail extends StatelessWidget {
   final Sloka sloka;
-  const SlokaDetail(this.sloka);
-
+  final int allShloka;
+    SlokaDetail(this.sloka, this.allShloka);
+  int selectedIndex = 0;
   @override
   Widget build(BuildContext context) {
+    final state = BlocProvider.of<GitaBloc>(context).state;
+    if (state is SlokasLoaded) {
+      selectedIndex = state.selectedIndex;
+    }
     return Padding(
       padding: EdgeInsets.all(12),
       child: Column(
@@ -429,13 +764,14 @@ class SlokaDetail extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Text:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    //श्लोक , अर्थ , स्पष्टीकरण
+                    Text(AppLocalizations.of(context)?.text ?? text, style: TextStyle(fontWeight: FontWeight.bold)),
                     Text(sloka.text, style: TextStyle(fontSize: 16)),
                     SizedBox(height: 12),
-                    Text('Meaning:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text(AppLocalizations.of(context)?.meaning ?? meaning, style: TextStyle(fontWeight: FontWeight.bold)),
                     Text(sloka.meaning, style: TextStyle(fontSize: 16)),
                     SizedBox(height: 12),
-                    Text('Explanation:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text(AppLocalizations.of(context)?.explanation ?? explanation, style: TextStyle(fontWeight: FontWeight.bold)),
                     Text(sloka.explanation, style: TextStyle(fontSize: 16)),
                   ],
                 ),
@@ -443,25 +779,32 @@ class SlokaDetail extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              IconButton(
-                  onPressed: () {
-                    final bloc = BlocProvider.of<GitaBloc>(context);
-                    final state = bloc.state;
-                    if (state is SlokasLoaded && state.selectedIndex > 0) {
-                      bloc.add(SelectSloka(state.selectedIndex - 1));
-                    }
-                  },
-                  icon: Icon(Icons.arrow_left)),
-              IconButton(
-                  onPressed: () {
-                    final bloc = BlocProvider.of<GitaBloc>(context);
-                    final state = bloc.state;
-                    if (state is SlokasLoaded &&
-                        state.selectedIndex < state.slokas.length - 1) {
-                      bloc.add(SelectSloka(state.selectedIndex + 1));
-                    }
-                  },
-                  icon: Icon(Icons.arrow_right)),
+              Visibility(
+                visible: selectedIndex !=0,
+                child: IconButton(
+                    onPressed: () {
+                      final bloc = BlocProvider.of<GitaBloc>(context);
+                      final state = bloc.state;
+                      if (state is SlokasLoaded && state.selectedIndex > 0) {
+                        bloc.add(SelectSloka(state.selectedIndex - 1));
+                      }
+                    },
+                    icon: Icon(Icons.arrow_circle_left_outlined,size: 35)),
+              ),
+              Text('${sloka.verse} / $allShloka', style: TextStyle(fontSize: 16)),
+              Visibility(
+                visible: selectedIndex != allShloka - 1,
+                child: IconButton(
+                    onPressed: () {
+                      final bloc = BlocProvider.of<GitaBloc>(context);
+                      final state = bloc.state;
+                      if (state is SlokasLoaded &&
+                          state.selectedIndex < state.slokas.length - 1) {
+                        bloc.add(SelectSloka(state.selectedIndex + 1));
+                      }
+                    },
+                    icon: Icon(Icons.arrow_circle_right_outlined,size: 35,)),
+              ),
             ],
           )
         ],
@@ -475,19 +818,203 @@ class LanguageDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButton<String>(
-      value: BlocProvider.of<GitaBloc>(context).currentLang,
-      dropdownColor: Colors.blue,
-      underline: SizedBox(),
-      icon: Icon(Icons.language, color: Colors.white),
-      items: [
-        DropdownMenuItem(value: 'marathi', child: Text('Marathi', style: TextStyle(color: Colors.white))),
-        DropdownMenuItem(value: 'hindi', child: Text('Hindi', style: TextStyle(color: Colors.white))),
-        DropdownMenuItem(value: 'english', child: Text('English', style: TextStyle(color: Colors.white))),
-      ],
-      onChanged: (value) {
-        if (value != null) BlocProvider.of<GitaBloc>(context).add(ChangeLanguage(value));
-      },
+    return ValueListenableBuilder<Locale>(
+        valueListenable: appLocale, // 👈 Listen for changes to current app locale
+        builder: (context, locale, _) {
+
+        return DropdownButton<String>(
+          // value: BlocProvider.of<GitaBloc>(context).currentLang,
+          value: locale.languageCode,
+          dropdownColor: Colors.blue,
+          underline: SizedBox(),
+          icon: Icon(Icons.language, color: Colors.white),
+          items: [
+            DropdownMenuItem(value: 'mr', child: Text('Marathi', style: TextStyle(color: Colors.white))),
+            DropdownMenuItem(value: 'hi', child: Text('Hindi', style: TextStyle(color: Colors.white))),
+            DropdownMenuItem(value: 'en', child: Text('English', style: TextStyle(color: Colors.white))),
+          ],
+          onChanged: (value) async {
+            if (value != null) {
+              BlocProvider.of<GitaBloc>(context).add(ChangeLanguage(value));
+              final newLanguage = Locale(value);
+              appLocale.value = newLanguage;
+              await LocaleManager.saveLocale(newLanguage);
+            }
+          },
+        );
+      }
+    );
+  }
+}
+
+class ProgressScreen extends StatelessWidget {
+  const ProgressScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) =>
+      GitaBloc()..add(LoadChapterProgress(appLocale.value.languageCode, [])),
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.blue,
+          title: const Text('Progress'),
+        ),
+        body: BlocBuilder<GitaBloc, GitaState>(
+          builder: (context, state) {
+            if (state is GitaLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (state is ChaptersLoadProgress) {
+              final progress = state.progress;
+              final overallPercent = state.overallPercent;
+              return SingleChildScrollView(
+                child: Column(
+                  children: [
+                    SizedBox(height: 20),
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          height: 120,
+                          width: 120,
+                          child: CircularProgressIndicator(
+                            value: overallPercent/100,
+                            strokeWidth: 8,
+                            color: Colors.green,
+                            backgroundColor: Colors.grey.shade300,
+                          ),
+                        ),
+                        Text(
+                          '${overallPercent.toStringAsFixed(1)}%',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: NeverScrollableScrollPhysics(),
+                      itemCount: state.chapters.length,
+                      itemBuilder: (context, index) {
+                        final chapter = state.chapters[index];
+                        final percent = (progress[chapter.chapter] ?? 0) / 100;
+
+                        return Padding(
+                          padding:
+                          const EdgeInsets.symmetric(horizontal: 5, vertical: 15),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 150,
+                                child: Text(
+                                  '${AppLocalizations.of(context)?.chapterText ?? chapterText} ${chapter.chapter}\n${chapter.name}',
+                                  maxLines: 3,
+                                ),
+                              ),
+                              // Text('${chapter.totalShlokas}'),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 15),
+                                  child: LinearProgressIndicator(
+                                    value: percent,
+                                    minHeight: 5,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                              // Text('${(percent * 100).toStringAsFixed(1)}%'),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class FavoriteSlokasScreen extends StatelessWidget {
+  final String language;
+  const FavoriteSlokasScreen({super.key, required this.language});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => GitaBloc()..currentLang = language..add(LoadFavorites(language)),
+      child: Scaffold(
+        appBar: AppBar(title: Text("Favourites"), backgroundColor: Colors.blue),
+        body: BlocBuilder<GitaBloc, GitaState>(
+          builder: (context, state) {
+            if (state is GitaLoading) return Center(child: CircularProgressIndicator());
+            if (state is SlokasLoaded) {
+              final slokas = state.slokas;
+              if (slokas.isEmpty) return Center(child: Text("No favourites found"));
+
+              return ListView.builder(
+                itemCount: slokas.length,
+                itemBuilder: (context, index) {
+                  final sloka = slokas[index];
+                  return ListTile(
+                    title: Text("${sloka.chapter}:${sloka.verse} - ${sloka.text}"),
+                    // subtitle: Text(sloka.meaning),
+                    trailing: IconButton(
+                      icon: Icon(Icons.delete, color: Colors.red),
+                      onPressed: () {
+                        // remove from fav
+                        context.read<GitaBloc>().add(
+                          ToggleFavorite(sloka: sloka, language: language,chapterName: sloka.chapterName),
+                        );
+                      },
+                    ),
+                    onTap: () {
+                      // open SlokaDetail if needed
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SlokaListScreen(
+                            chapterName: sloka.chapterName,
+                            chapter: sloka.chapter,
+                            language: language,
+                            initialIndex: sloka.verse - 1,
+                          ),
+                        ),
+                      );
+                      /*Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BlocProvider(
+                            create: (_) => GitaBloc()
+                              ..currentLang = language
+                              ..add(LoadSlokas(sloka.chapter))
+                              ..add(SelectSloka(sloka.verse)),
+                            child: Material(
+                              child: SlokaDetail(sloka, 0),
+                            ),
+                          ),
+                        ),
+                      );*/
+                    },
+                  );
+                },
+              );
+            }
+            return SizedBox.shrink();
+          },
+        ),
+      ),
     );
   }
 }
