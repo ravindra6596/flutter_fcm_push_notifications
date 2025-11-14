@@ -254,24 +254,6 @@ class GitaBloc extends Bloc<GitaEvent, GitaState> {
       List jsonData = json.decode(data)['BhagavadGitaChapter'];
       currentSlokas = jsonData.map((e) => Sloka.fromJson(e)).toList();
       selectedIndex = 0;
-      // NEW: Load favorite status from DB for this chapter and language
-      final favMaps = await DatabaseHelper().getFavs(language: currentLang,  );
-      final favSet = favMaps.map((fav) => '${fav['chapter']}-${fav['verse']}').toSet(); // Create a set for quick lookup
-
-      // Update isFavourite for each sloka if it's in favorites
-      currentSlokas = currentSlokas.map((sloka) {
-        final key = '${sloka.chapter}-${sloka.verse}';
-        return Sloka(
-          chapter: sloka.chapter,
-          verse: sloka.verse,
-          text: sloka.text,
-          meaning: sloka.meaning,
-          explanation: sloka.explanation,
-          isFavourite: favSet.contains(key) ? 1 : 0,  // Set based on DB
-          chapterName: sloka.chapterName,  // Preserve (null for regular slokas)
-          isRead: sloka.isRead,
-        );
-      }).toList();
       emit(SlokasLoaded(currentSlokas, selectedIndex));
     });
 
