@@ -56,6 +56,7 @@ class DatabaseHelper {
           verse INTEGER,
           chapterName TEXT,
           text TEXT,
+          reference TEXT,
           meaning TEXT,
           explanation TEXT,
           isFavourite INTEGER,
@@ -68,6 +69,7 @@ class DatabaseHelper {
         chapter INTEGER NOT NULL,
         verse INTEGER NOT NULL,
         chapterName TEXT NOT NULL,
+        shlok TEXT NOT NULL,
         language TEXT NOT NULL,
         isRead INTEGER NOT NULL DEFAULT 0,
         UNIQUE(chapter, verse, language)
@@ -168,6 +170,7 @@ class DatabaseHelper {
       'chapter': sloka.chapter,
       'verse': sloka.verse,
       'text': sloka.text,
+      'reference': sloka.reference,
       'meaning': sloka.meaning,
       'explanation': sloka.explanation,
       'chapterName': chapterName,
@@ -207,6 +210,7 @@ class DatabaseHelper {
       int chapter,
       int verse,
       String chapterName,
+      String shlok,
       String language,
    ) async {
     final db = await dataBase;
@@ -216,6 +220,7 @@ class DatabaseHelper {
         'chapter': chapter,
         'verse': verse,
         'chapterName': chapterName,
+        'shlok': shlok,
         'language': language,
         'isRead': 1,
       },
@@ -255,4 +260,22 @@ class DatabaseHelper {
     final db = await dataBase;
     await db.delete(tableName);
   }
+
+  Future<Map<String, dynamic>?> getLastReadSloka(String language) async {
+    final db = await dataBase;
+
+    final result = await db.query(
+      'sloka_read_status',
+      orderBy: 'id DESC',
+      where: 'language = ?',
+      whereArgs: [language],
+      limit: 1,
+    );
+
+    if (result.isNotEmpty) {
+      return result.first;
+    }
+    return null;
+  }
+
 }

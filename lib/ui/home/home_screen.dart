@@ -15,6 +15,7 @@ import 'package:push_notification/ui/QS/new_getx_feedback.dart';
 import 'package:push_notification/ui/QS/privacy_policy.dart';
 import 'package:push_notification/ui/fav.dart';
 import 'package:push_notification/ui/lang.dart';
+import 'package:push_notification/ui/speech_text.dart';
 import 'package:push_notification/utils/constants.dart';
 import 'package:push_notification/utils/strings.dart';
 import 'package:share_plus/share_plus.dart';
@@ -193,10 +194,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               ElevatedButton(
                 onPressed: () async {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => BlocProvider(
-                      create: (_) => FavBloc(FavoriteRepository())..add(LoadFav()),child: FavHomeScreen()),));
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => SpeechSampleApp(),));
                 },
-                child: Text('FavoritesScreen'),
+                child: Text('SpeechSampleApp'),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -212,7 +212,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             '📚 Download now and unlock your full potential:\n$playStoreLink',
                         excludedCupertinoActivities: [CupertinoActivityType.airDrop],
                       ),
-                  );              },
+                  );
+                  },
                 child: Text('Share App'),
               ),
             ],

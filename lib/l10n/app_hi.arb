@@ -2,7 +2,9 @@
     "appName": "भागवद गीता",
     "text": "पद्य",
     "meaning": "अर्थ",
+    "reference": "संदर्भ",
     "explanation": "व्याख्या",
     "chapterText": "अध्याय",
-    "chaptersList": "अध्याय सूची"
+    "chaptersList": "अध्याय सूची",
+    "lastReadVerse": "अंतिम पढ़ा गया श्लोक"
 }

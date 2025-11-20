@@ -2,7 +2,9 @@
     "appName": "भगवद्गीता",
     "text": "श्लोक",
     "meaning": "अर्थ",
+    "reference": "संदर्भ",
     "explanation": "स्पष्टीकरण",
     "chapterText": "अध्याय",
-    "chaptersList": "अध्याय यादी"
+    "chaptersList": "अध्याय यादी",
+    "lastReadVerse": "शेवटचा वाचलेला श्लोक"
 }

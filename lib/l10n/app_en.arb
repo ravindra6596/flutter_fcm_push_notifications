@@ -2,7 +2,9 @@
     "appName": "BhagavadGita",
     "text": "Verse",
     "meaning": "Meaning",
+    "reference": "Reference",
     "explanation": "Explanation",
     "chapterText": "Chapter",
-    "chaptersList": "List of Chapters"
+    "chaptersList": "List of Chapters",
+    "lastReadVerse": "Last read verse"
 }
