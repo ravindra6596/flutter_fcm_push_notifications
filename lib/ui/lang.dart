@@ -9,6 +9,7 @@ import 'package:push_notification/core/db_helper.dart';
 import 'package:push_notification/utils/locale_controller.dart';
 import 'package:push_notification/utils/strings.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 class Chapter {
   final int? chapter;
@@ -879,7 +880,7 @@ class _SlokaListScreenState extends State<SlokaListScreen> {
                                   '\n\n${AppLocalizations.of(context)?.reference ?? reference} : ${current.reference}'
                                   '\n\n${AppLocalizations.of(context)?.meaning ?? meaning} :${current.meaning}'
                                   '\n\n${AppLocalizations.of(context)?.explanation ?? explanation} :${current.explanation}'
-                                  '\n\n\nThis verse is shared via the Bhagavad Gita mobile app in Marathi. If you don’t have this app, you can install it using the link below.\n$playStoreLink',
+                                  '\n\n${AppLocalizations.of(context)?.appInstallIns ?? appInstallIns}\n$playStoreLink',
                               excludedCupertinoActivities: [CupertinoActivityType.airDrop],
                             ),
                           );
@@ -969,12 +970,49 @@ class _SlokaListScreenState extends State<SlokaListScreen> {
 }
 
 
-class SlokaDetail extends StatelessWidget {
+class SlokaDetail extends StatefulWidget {
   final Sloka sloka;
   final int allShloka;
   final String isFrom;
     SlokaDetail(this.sloka, this.allShloka,this.isFrom);
+
+  @override
+  State<SlokaDetail> createState() => _SlokaDetailState();
+}
+
+class _SlokaDetailState extends State<SlokaDetail> {
   int selectedIndex = 0;
+  FlutterTts flutterTts = FlutterTts();
+  Map? currentVoice;
+  List<Map> voiceList = [];
+  @override
+  void initState() {
+    initTTS();
+    super.initState();
+  }
+
+  void initTTS() {
+    flutterTts.getVoices.then(
+      (value) {
+        try {
+          voiceList = List<Map>.from(value);
+          log(voiceList.toString());
+          setState(() {
+          voiceList = voiceList.where((element) => element['name'].contains('hi')).toList();
+            currentVoice = voiceList.first;
+            setVoice(currentVoice!);
+          });
+        } catch (e) {
+          log(e.toString());
+        }
+      },
+    );
+  }
+
+  void setVoice(Map voice){
+    flutterTts.setVoice({'name':voice['name'],'local':voice['local']});
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = BlocProvider.of<GitaBloc>(context).state;
@@ -991,24 +1029,27 @@ class SlokaDetail extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    IconButton(onPressed: (){
+                      flutterTts.speak(widget.sloka.explanation);
+                    }, icon: Icon(Icons.speaker)),
                     //श्लोक , अर्थ , स्पष्टीकरण
                     Text(AppLocalizations.of(context)?.text ?? text, style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text(sloka.text, style: TextStyle(fontSize: 16)),
+                    Text(widget.sloka.text, style: TextStyle(fontSize: 16)),
                     SizedBox(height: 12),
                     Text(AppLocalizations.of(context)?.reference ?? reference, style: TextStyle(fontWeight: FontWeight.bold)),
                     SizedBox(height: 12),
-                    Text(sloka.reference, style: TextStyle(fontSize: 16)),
+                    Text(widget.sloka.reference, style: TextStyle(fontSize: 16)),
                     SizedBox(height: 12),
                     Text(AppLocalizations.of(context)?.meaning ?? meaning, style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text(sloka.meaning, style: TextStyle(fontSize: 16)),
+                    Text(widget.sloka.meaning, style: TextStyle(fontSize: 16)),
                     SizedBox(height: 12),
                     Text(AppLocalizations.of(context)?.explanation ?? explanation, style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text(sloka.explanation, style: TextStyle(fontSize: 16)),
+                    Text(widget.sloka.explanation, style: TextStyle(fontSize: 16)),
                   ],
                 ),
               )),
           Visibility(
-            visible: isFrom == 'allList',
+            visible: widget.isFrom == 'allList',
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1021,9 +1062,9 @@ class SlokaDetail extends StatelessWidget {
                       }
                     },
                     icon: Icon(Icons.arrow_circle_left_outlined,size: 35)),
-                Text('${sloka.verse} / $allShloka', style: TextStyle(fontSize: 16)),
+                Text('${widget.sloka.verse} / ${widget.allShloka}', style: TextStyle(fontSize: 16)),
                 IconButton(
-                    onPressed: selectedIndex == allShloka - 1 ? null :  () {
+                    onPressed: selectedIndex == widget.allShloka - 1 ? null :  () {
                       final bloc = BlocProvider.of<GitaBloc>(context);
                       final state = bloc.state;
                       if (state is SlokasLoaded &&

@@ -15,3 +15,4 @@ const String explanation = 'स्पष्टीकरण';
 const String chapterText = 'अध्याय';
 const String chaptersList = 'अध्याय यादी';
 const String lastReadVerse = 'शेवटचा वाचलेला श्लोक';
+const String appInstallIns = 'हा श्लोक मराठी भाषेत भगवद्गीता मोबाईल ॲपद्वारे शेअर केला आहे. जर तुमच्याकडे हे ॲप नसेल तर तुम्ही खालील लिंक वापरून ते इन्स्टॉल करू शकता.';
